@@ -1,7 +1,7 @@
 // Jalankan: node test.mjs
 import assert from "node:assert/strict";
-import { LINKS, CATEGORIES } from "./data/links.js";
-import { buildIndex, filterLinks, norm, hostOf } from "./assets/search.js";
+import { LINKS, CATEGORIES } from "./public/data/links.js";
+import { buildIndex, filterLinks, norm, hostOf } from "./public/assets/search.js";
 
 // --- integritas data ---
 const ids = new Set(CATEGORIES.map((c) => c.id));
