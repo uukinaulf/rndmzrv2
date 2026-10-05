@@ -292,17 +292,17 @@ h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:-.03em;font-
 .grad{background:linear-gradient(100deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{margin:10px 0 0;color:var(--fg-soft)}
 .list{list-style:none;padding:0;margin:20px 0 0;border-top:1px solid var(--line-soft)}
-.row{position:relative;display:flex;align-items:center;gap:14px;padding:14px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both}
+.row{position:relative;display:flex;align-items:flex-start;gap:14px;padding:14px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 .row:hover{background:var(--surface-2)}
 .row:focus-within{background:var(--surface-2)}
 .row-link{position:absolute;inset:0;border-radius:10px}
 .row:hover .row-link{border:1px solid var(--line);outline:none}
-.badge{flex:none;font-family:var(--font-mono);font-size:10px;color:var(--accent-2);border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:var(--surface);white-space:nowrap}
-.row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.row-title{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{flex:none;font-family:var(--font-mono);font-size:10px;color:var(--accent-2);border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:var(--surface);white-space:nowrap;margin-top:2px}
+.row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.row-title{font-size:14.5px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:break-word}
 .row-title:hover{color:var(--accent)}
-.row-date{flex:none;font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);text-align:right}
+.row-date{flex:none;font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);text-align:right;margin-top:3px;white-space:nowrap}
 .arrow{flex:none;color:var(--fg-dim);opacity:0;transition:opacity .16s,transform .16s}
 .arrow svg{width:15px;height:15px;display:block}
 .row:hover .arrow{opacity:1;transform:translate(2px,-1px)}
