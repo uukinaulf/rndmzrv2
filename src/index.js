@@ -72,6 +72,23 @@ async function getItems(request, ctx) {
       });
     }
     if (!items.length) throw new Error("feed kosong");
+
+    // resolve thumbnail tiap episode paralel (feed kosong tanpa gambar)
+    const thumbs = await Promise.all(items.map(async (it) => {
+      try {
+        const h = await fetch(it.link, { headers: { "User-Agent": UA }, cf: { cacheTtl: CACHE_TTL, cacheEverything: true } });
+        if (!h.ok) return "";
+        const body = await h.text();
+        const og = /<meta[^>]+(?:property|name)="og:image"[^>]+content="([^"]+)"/.exec(body);
+        if (og) return htmlDecode(og[1]);
+        const anm = /<img\b[^>]*class="[^"]*anmsa[^"]*"[^>]*src="([^"]+)"|<img\b[^>]*src="([^"]+)"[^>]*class="[^"]*anmsa[^"]*"/i.exec(body);
+        return anm ? htmlDecode(anm[1] || anm[2]) : "";
+      } catch {
+        return "";
+      }
+    }));
+    items.forEach((it, i) => { it.thumb = thumbs[i]; });
+
     return { items, fetchedAt: new Date().toISOString() };
   })().finally(() => { inflight = null; });
   return inflight;
@@ -291,6 +308,7 @@ async function load() {
     status.textContent = "Sinkron " + (data.fetchedAt ? new Date(data.fetchedAt).toLocaleString("id-ID") : "");
     list.innerHTML = items.map((i, idx) => \`
       <li class="row" style="animation-delay:\${Math.min(idx * 30, 400)}ms" data-i="\${idx}">
+        <img class="row-thumb" src="\${esc(i.thumb || "")}" alt="" loading="lazy" \${i.thumb ? "" : "hidden"}>
         <span class="row-main">
           <span class="row-title">\${esc(i.title)}</span>
           <span class="row-meta">
@@ -452,12 +470,14 @@ h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:-.03em;font-
 .grad{background:linear-gradient(100deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{margin:10px 0 0;color:var(--fg-soft)}
 .list{list-style:none;padding:0;margin:20px 0 0;border-top:1px solid var(--line-soft)}
-.row{position:relative;display:flex;flex-direction:column;gap:6px;padding:15px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both;cursor:pointer}
+.row{position:relative;display:flex;align-items:center;gap:14px;padding:10px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both;cursor:pointer}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 .row:hover{background:var(--surface-2)}
 .row:focus-within{background:var(--surface-2)}
+.row-thumb{flex:none;width:88px;height:52px;object-fit:cover;border-radius:8px;background:var(--surface-2);display:block}
+.row-thumb[hidden]{display:none}
 .row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.row-title{font-size:15px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:break-word}
+.row-title{font-size:15px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:break-word}
 .row-title:hover{color:var(--accent)}
 .row-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .badge{flex:none;font-family:var(--font-mono);font-size:10px;color:var(--accent-2);border:1px solid var(--line);border-radius:999px;padding:2px 8px;background:var(--surface);white-space:nowrap}
@@ -505,6 +525,7 @@ a.link{text-decoration:none}
 .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:72px;padding-block:28px;border-top:1px solid var(--line-soft);font-size:13px;color:var(--fg-dim)}
 @media(max-width:640px){
   .row-title{font-size:14px}
+  .row-thumb{width:72px;height:44px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 `;
