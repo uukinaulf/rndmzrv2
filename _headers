@@ -1,0 +1,13 @@
+# Deploy: Cloudflare Pages → directory root. Tanpa build step.
+# Cache: CSS/JS/data stabil; HTML selalu revalidate supaya update langsung terlihat.
+/assets/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/data/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/
+  Cache-Control: public, max-age=0, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'self'; object-src 'none'
