@@ -148,11 +148,10 @@ h1 {
 
 /* ---- filters ---- */
 .filters { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
-.chips { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }
-.chip {
+.chips { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }.chip {
   display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; cursor: pointer;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-full);
-  font-size: 13px; font-weight: 500; color: var(--fg-soft); white-space: nowrap;
+  font-size: 13px; font-weight: 500; color: var(--fg-soft); white-space: nowrap; flex: none;
   transition: color var(--dur), border-color var(--dur), background var(--dur);
 }
 .chip svg { width: 15px; height: 15px; }
@@ -167,6 +166,20 @@ h1 {
 .toggle input:checked { background: color-mix(in oklab, var(--accent) 20%, transparent); border-color: var(--accent); }
 .toggle input:checked::after { transform: translateX(14px); background: var(--accent); }
 .toggle:hover { color: var(--fg); }
+
+/* ---- filters : mobile ---- */
+@media (max-width: 640px) {
+  .filters { align-items: stretch; gap: 10px; }
+  .chips {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity; padding-bottom: 6px; scrollbar-width: none; width: 100%;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { scroll-snap-align: start; }
+  .toggle { width: 100%; justify-content: center; padding: 10px 0; }
+  .toggle input { flex: none; }
+}
+
 
 /* ---- result bar ---- */
 .result-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 40px 0 16px; }
