@@ -208,11 +208,13 @@ async function load() {
     list.innerHTML = items.map((i, idx) => \`
       <li class="row" style="animation-delay:\${Math.min(idx * 30, 400)}ms">
         <a class="row-link" href="\${esc(i.link)}" target="_blank" rel="noopener noreferrer" title="Buka \${esc(i.title)}"></a>
-        <span class="badge">\${esc(i.cat || "Anime")}</span>
         <span class="row-main">
           <span class="row-title">\${esc(i.title)}</span>
+          <span class="row-meta">
+            <span class="badge">\${esc(i.cat || "Anime")}</span>
+            <time class="row-date">\${esc(fmt(i.pub))}</time>
+          </span>
         </span>
-        <time class="row-date">\${esc(fmt(i.pub))}</time>
         <span class="arrow" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
         </span>
@@ -292,27 +294,27 @@ h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:-.03em;font-
 .grad{background:linear-gradient(100deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{margin:10px 0 0;color:var(--fg-soft)}
 .list{list-style:none;padding:0;margin:20px 0 0;border-top:1px solid var(--line-soft)}
-.row{position:relative;display:flex;align-items:flex-start;gap:14px;padding:14px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both}
+.row{position:relative;display:flex;flex-direction:column;gap:6px;padding:15px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 .row:hover{background:var(--surface-2)}
 .row:focus-within{background:var(--surface-2)}
 .row-link{position:absolute;inset:0;border-radius:10px}
 .row:hover .row-link{border:1px solid var(--line);outline:none}
-.badge{flex:none;font-family:var(--font-mono);font-size:10px;color:var(--accent-2);border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:var(--surface);white-space:nowrap;margin-top:2px}
 .row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.row-title{font-size:14.5px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:break-word}
+.row-title{font-size:15px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:break-word}
 .row-title:hover{color:var(--accent)}
-.row-date{flex:none;font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);text-align:right;margin-top:3px;white-space:nowrap}
-.arrow{flex:none;color:var(--fg-dim);opacity:0;transition:opacity .16s,transform .16s}
+.row-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.badge{flex:none;font-family:var(--font-mono);font-size:10px;color:var(--accent-2);border:1px solid var(--line);border-radius:999px;padding:2px 8px;background:var(--surface);white-space:nowrap}
+.row-date{font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);white-space:nowrap}
+.arrow{position:absolute;top:50%;right:10px;transform:translateY(-50%);color:var(--fg-dim);opacity:0;transition:opacity .16s,transform .16s}
 .arrow svg{width:15px;height:15px;display:block}
-.row:hover .arrow{opacity:1;transform:translate(2px,-1px)}
+.row:hover .arrow{opacity:1;transform:translate(2px,-50%)}
 .skeleton{height:54px;background:var(--surface-2);border-radius:10px;margin:6px 0;animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:.8}}
 .empty{padding:60px 20px;text-align:center;color:var(--fg-soft)}
 .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:72px;padding-block:28px;border-top:1px solid var(--line-soft);font-size:13px;color:var(--fg-dim)}
 @media(max-width:640px){
-  .badge{display:none}
-  .row-date{display:none}
+  .row-title{font-size:14px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 `;
