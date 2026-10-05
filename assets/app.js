@@ -3,8 +3,7 @@ import { buildIndex, filterLinks, hostOf as host } from "./search.js";
 
 const $ = (s) => document.querySelector(s);
 const grid = $("#grid"), chips = $("#chips"), qInput = $("#q");
-const emptyBox = $("#empty"), status = $("#status");
-const toastEl = $("#toast");
+const emptyBox = $("#empty"), status = $("#status"), toastEl = $("#toast");
 
 const ICONS = {
   code: '<path d="m9 18-6-6 6-6M15 6l6 6-6 6"/>',
@@ -19,23 +18,19 @@ const ICONS = {
 const icon = (name, w = 2) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.code}</svg>`;
 
-const LS = { theme: "rndmzr:theme", fav: "rndmzr:fav", view: "rndmzr:view" };
+const LS = { theme: "rndmzr:theme", fav: "rndmzr:fav" };
 const store = {
   get(k, fallback) { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
 const catOf = (id) => CATEGORIES.find((c) => c.id === id);
-const key = (l) => l.url;
-
 let state = {
   q: "",
   cat: new URLSearchParams(location.search).get("cat") || "all",
   favOnly: false,
-  view: store.get(LS.view, "grid"),
 };
 const favs = new Set(store.get(LS.fav, []));
-
 const haystack = buildIndex(LINKS, (c) => catOf(c)?.label || c);
 
 function escapeHtml(s) {
@@ -50,43 +45,21 @@ function highlight(text, q) {
 
 const results = () => filterLinks(LINKS, haystack, { ...state, favs });
 
-function card(l, q) {
+function row(l, q) {
   const c = catOf(l.cat);
-  const isFav = favs.has(key(l));
-  const initial = escapeHtml(l.title.trim()[0] || "?");
-  return `<li class="card" data-url="${escapeHtml(l.url)}">
-    <a class="card-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">
-      <span class="sr-only">Buka ${escapeHtml(l.title)}</span>
-    </a>
-    <div class="card-top">
-      <span class="favicon" aria-hidden="true"><span>${initial}</span></span>
-      <span>
-        <span class="card-title">${highlight(l.title, q)}</span>
-        <span class="host">${escapeHtml(host(l.url))}</span>
-      </span>
-      <button class="star" type="button" aria-pressed="${isFav}" aria-label="${isFav ? "Hapus dari" : "Tambah ke"} favorit: ${escapeHtml(l.title)}">
-        <svg viewBox="0 0 24 24" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z"/></svg>
-      </button>
-    </div>
-    <p class="card-desc">${highlight(l.desc, q)}</p>
-    <div class="card-foot">
-      <span class="tag cat-tag">${icon(c?.icon, 1.6)} ${escapeHtml(c?.label || l.cat)}</span>
-      ${(l.tags || []).map((t) => `<span class="tag">${highlight(t, q)}</span>`).join("")}
-      <span class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg></span>
-    </div>
+  const isFav = favs.has(l.url);
+  return `<li class="row" data-url="${escapeHtml(l.url)}">
+    <a class="row-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><span class="sr-only">Buka ${escapeHtml(l.title)}</span></a>
+    <span class="favicon" aria-hidden="true">${icon(c?.icon, 1.5)}</span>
+    <span class="row-main">
+      <span class="row-title">${highlight(l.title, q)}</span>
+      <span class="row-desc">${highlight(l.desc, q)}</span>
+    </span>
+    <span class="row-tags">${(l.tags || []).map((t) => `<span class="tag">${highlight(t, q)}</span>`).join("")}</span>
+    <button class="star" type="button" aria-pressed="${isFav}" aria-label="${isFav ? "Hapus dari" : "Tambah ke"} favorit: ${escapeHtml(l.title)}">
+      <svg viewBox="0 0 24 24" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z"/></svg>
+    </button>
   </li>`;
-}
-
-function hydrateIcons(root) {
-  root.querySelectorAll(".favicon").forEach((el) => {
-    const url = el.closest(".card")?.dataset.url;
-    if (!url) return;
-    const img = new Image();
-    img.loading = "lazy";
-    img.alt = "";
-    img.src = `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(host(url))}`;
-    img.addEventListener("load", () => { el.replaceChildren(img); }, { once: true });
-  });
 }
 
 function renderChips() {
@@ -98,19 +71,10 @@ function renderChips() {
 function render() {
   const list = results();
   const q = state.q.trim();
-  grid.dataset.view = state.view;
-  grid.innerHTML = list.map((l) => card(l, q)).join("");
-  hydrateIcons(grid);
-
+  grid.innerHTML = list.map((l) => row(l, q)).join("");
   emptyBox.hidden = list.length > 0;
-  emptyBox.querySelector("p").innerHTML = q
-    ? `Tidak ada hasil untuk <strong>${escapeHtml(q)}</strong>.`
-    : "Tidak ada link untuk filter ini.";
-  const bits = [`${list.length} dari ${LINKS.length} link`];
-  if (state.cat !== "all") bits.push(catOf(state.cat)?.label);
-  if (state.favOnly) bits.push("favorit");
-  status.textContent = bits.join(" · ");
-
+  emptyBox.querySelector("p").innerHTML = q ? `Tidak ada hasil untuk <strong>${escapeHtml(q)}</strong>.` : "Tidak ada link buat filter ini.";
+  status.textContent = [`${list.length} dari ${LINKS.length} link`, (state.cat !== "all" ? catOf(state.cat)?.label : null), (state.favOnly ? "favorit" : null)].filter(Boolean).join(" · ");
   syncUrl();
 }
 
@@ -148,7 +112,7 @@ chips.addEventListener("click", (e) => {
   state.cat = btn.dataset.cat;
   renderChips();
   render();
-  document.getElementById("grid").scrollIntoView({ block: "start", behavior: "smooth" });
+  grid.scrollIntoView({ block: "start", behavior: "smooth" });
 });
 
 $("#favOnly").addEventListener("change", (e) => { state.favOnly = e.target.checked; render(); });
@@ -157,7 +121,7 @@ grid.addEventListener("click", (e) => {
   const star = e.target.closest(".star");
   if (!star) return;
   e.preventDefault();
-  const url = star.closest(".card").dataset.url;
+  const url = star.closest(".row").dataset.url;
   favs.has(url) ? favs.delete(url) : favs.add(url);
   store.set(LS.fav, [...favs]);
   const link = LINKS.find((l) => l.url === url);
@@ -165,20 +129,11 @@ grid.addEventListener("click", (e) => {
   render();
 });
 
-document.querySelectorAll(".view-toggle button").forEach((b) =>
-  b.addEventListener("click", () => {
-    state.view = b.dataset.view;
-    store.set(LS.view, state.view);
-    document.querySelectorAll(".view-toggle button").forEach((x) => x.classList.toggle("active", x === b));
-    render();
-  })
-);
-
 $("#themeBtn").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   store.set(LS.theme, next);
-  document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#08090c" : "#f7f8fb";
+  document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#101216" : "#f4f6fb";
 });
 
 document.addEventListener("keydown", (e) => {
@@ -194,14 +149,13 @@ document.addEventListener("keydown", (e) => {
   document.documentElement.dataset.theme =
     store.get(LS.theme, null) || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
   document.querySelector('meta[name="theme-color"]').content =
-    document.documentElement.dataset.theme === "dark" ? "#08090c" : "#f7f8fb";
+    document.documentElement.dataset.theme === "dark" ? "#101216" : "#f4f6fb";
 
   const p = new URLSearchParams(location.search);
   state.q = p.get("q") || "";
   state.favOnly = p.get("fav") === "1";
   if (state.q) { qInput.value = state.q; $("#clearBtn").hidden = false; }
   $("#favOnly").checked = state.favOnly;
-  document.querySelectorAll(".view-toggle button").forEach((x) => x.classList.toggle("active", x.dataset.view === state.view));
 
   $("#totalCount").textContent = LINKS.length;
   $("#catCount").textContent = CATEGORIES.length;

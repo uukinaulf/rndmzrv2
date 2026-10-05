@@ -6,7 +6,7 @@
 <title>rndmzr — index link bermanfaat</title>
 <meta name="description" content="Kumpulan link berguna untuk developer: tools, belajar, desain, AI, infra, data, keamanan, produktivitas.">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#08090c">
+<meta name="theme-color" content="#101216">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,50 +39,44 @@
 
 <main>
   <section class="hero wrap">
-    <p class="eyebrow"><span class="dot"></span><span id="totalCount">0</span> link terkurasi · <span id="catCount">0</span> kategori</p>
-    <h1>Tautan yang <span class="grad">layak disimpan</span>.</h1>
-    <p class="lede">Index pribadi berisi tools, sumber belajar, dan referensi yang benar-benar dipakai. Tanpa iklan, tanpa affiliate, tanpa noise.</p>
-
-    <div class="search">
-      <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Cari link, tag, atau kategori…" autocomplete="off" spellcheck="false" aria-label="Cari link" aria-controls="grid">
-      <kbd class="hint-key">/</kbd>
-      <button id="clearBtn" class="clear-btn" type="button" aria-label="Bersihkan pencarian" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-
-    <div class="filters" role="group" aria-label="Filter kategori">
-      <div id="chips" class="chips"></div>
-      <label class="toggle"><input id="favOnly" type="checkbox"><span>Favorit saja</span></label>
+    <div class="hero-row">
+      <div>
+        <p class="eyebrow"><span class="dot"></span><span id="totalCount">0</span> link · <span id="catCount">0</span> kategori</p>
+        <h1>Link <span class="grad">layak simpan</span></h1>
+        <p class="lede">Tools, sumber belajar, referensi yang benar-benar dipakai. Tanpa iklan, tanpa noise.</p>
+        <div class="search">
+          <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Cari link, tag, atau kategori…" autocomplete="off" spellcheck="false" aria-label="Cari link" aria-controls="grid">
+          <kbd class="hint-key">/</kbd>
+          <button id="clearBtn" class="clear-btn" type="button" aria-label="Bersihkan pencarian" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="filters" role="group" aria-label="Filter kategori">
+          <div id="chips" class="chips"></div>
+          <label class="toggle"><input id="favOnly" type="checkbox"><span>Favorit</span></label>
+        </div>
+      </div>
     </div>
   </section>
 
   <section class="wrap">
     <div class="result-bar">
-      <h2 id="resultLabel" class="sr-only">Hasil</h2>
       <p id="status" class="status" role="status" aria-live="polite"></p>
-      <div class="view-toggle" role="group" aria-label="Tata letak">
-        <button data-view="grid" class="active" type="button" aria-label="Tampilan grid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
-        <button data-view="list" type="button" aria-label="Tampilan list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-      </div>
     </div>
 
-    <ul id="grid" class="grid" data-view="grid"></ul>
+    <ul id="grid" class="grid"></ul>
 
     <div id="empty" class="empty" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <p></p>
       <button id="resetBtn" class="btn-outline" type="button">Reset filter</button>
     </div>
   </section>
 </main>
 
-<footer class="wrap footer-note">
-  <div class="footer">
+<footer class="wrap footer" style="margin-top:72px;padding-block:28px;border-top:1px solid var(--line-soft);font-size:13px;color:var(--fg-dim)">
   <p>Dibuat manual. Tiap link pernah dipakai minimal sekali.</p>
   <p class="mono">Ctrl/⌘ + K cari · T tema</p>
-  </div>
 </footer>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
