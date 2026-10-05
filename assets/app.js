@@ -181,20 +181,12 @@ $("#themeBtn").addEventListener("click", () => {
   document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#08090c" : "#f7f8fb";
 });
 
-$("#randomBtn").addEventListener("click", () => {
-  const pool = results().length ? results() : LINKS;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
-  toast(`Acak: ${pick.title}`);
-  window.open(pick.url, "_blank", "noopener");
-});
-
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
   if (e.key === "/" && !typing) { e.preventDefault(); qInput.focus(); }
   else if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) { e.preventDefault(); qInput.focus(); qInput.select(); }
   else if (e.key === "Escape" && typing) { qInput.blur(); }
   else if (!typing && (e.key === "t" || e.key === "T")) { $("#themeBtn").click(); }
-  else if (!typing && (e.key === "r" || e.key === "R")) { $("#randomBtn").click(); }
 });
 
 /* ---- init ---- */
