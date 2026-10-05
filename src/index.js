@@ -5,9 +5,27 @@
 // - /anime            -> halaman UI daftar rilis
 // - /                -> fallback ke static
 
-const UPSTREAM_FEED = "https://v2.samehadaku.how/feed/" ;
 const CACHE_TTL = 900; // 15 menit
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+
+// Sumber feed anime. `kind` menentukan parser download & thumb.
+// samehadaku = episode (download-eps), kusonime = batch (smokeurlrh)
+const SOURCES = [
+  {
+    id: "samehadaku",
+    label: "Samehadaku",
+    kind: "episode",
+    feed: "https://v2.samehadaku.how/feed/",
+    host: "samehadaku",
+  },
+  {
+    id: "kusonime",
+    label: "Kusonime",
+    kind: "batch",
+    feed: "https://kusonime.com/feed/",
+    host: "kusonime",
+  },
+];
 
 export default {
   async fetch(request, env, ctx) {
@@ -42,45 +60,54 @@ let inflight = null;
 async function getItems(request, ctx) {
   if (inflight) return inflight;
   inflight = (async () => {
-    const res = await fetch(UPSTREAM_FEED, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-      },
-      cf: { cacheTtl: CACHE_TTL, cacheEverything: true },
-    });
-    if (!res.ok) throw new Error(`upstream ${res.status}`);
-
-    const xml = await res.text();
-    const items = [];
-    const itemRe = /<item>([\s\S]*?)<\/item>/g;
-    let m;
-    while ((m = itemRe.exec(xml))) {
-      const chunk = m[1];
-      const g = (name) => {
-        const r = new RegExp(`<${name}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${name}>`);
-        const x = r.exec(chunk);
-        return x ? htmlDecode(x[1]).trim() : "";
-      };
-      const title = g("title");
-      if (!title) continue;
-      items.push({
-        title,
-        link: g("link"),
-        pub: g("pubDate"),
-        cat: g("category") || "Anime",
-        guid: g("guid") || g("link"),
+    const all = await Promise.all(SOURCES.map(async (src) => {
+      const res = await fetch(src.feed, {
+        headers: { "User-Agent": UA },
+        cf: { cacheTtl: CACHE_TTL, cacheEverything: true },
       });
-    }
-    if (!items.length) throw new Error("feed kosong");
+      if (!res.ok) throw new Error(`feed ${src.id} ${res.status}`);
+      const xml = await res.text();
+      const items = [];
+      const itemRe = /<item>([\s\S]*?)<\/item>/g;
+      let m;
+      while ((m = itemRe.exec(xml))) {
+        const chunk = m[1];
+        const g = (name) => {
+          const r = new RegExp(`<${name}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${name}>`);
+          const x = r.exec(chunk);
+          return x ? htmlDecode(x[1]).trim() : "";
+        };
+        const title = g("title");
+        if (!title) continue;
+        // kategori: samehadaku 1 (seri), kusonime 2 (Anime + judul) -> ambil yang spesifik
+        const cats = [];
+        const catRe = /<category>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/category>/g;
+        let cm;
+        while ((cm = catRe.exec(chunk))) cats.push(htmlDecode(cm[1]).trim());
+        const cat = cats.filter((c) => c.toLowerCase() !== "anime").pop() || cats[0] || "Anime";
+        items.push({
+          title,
+          link: g("link"),
+          pub: g("pubDate"),
+          cat,
+          guid: g("guid") || g("link"),
+          source: src.id,
+          sourceLabel: src.label,
+          kind: src.kind,
+        });
+      }
+      return items;
+    }));
+    const items = all.flat();
 
-    // resolve thumbnail tiap episode paralel (feed kosong tanpa gambar)
+    // resolve thumbnail tiap item paralel (feed kosong tanpa gambar)
     const thumbs = await Promise.all(items.map(async (it) => {
       try {
         const h = await fetch(it.link, { headers: { "User-Agent": UA }, cf: { cacheTtl: CACHE_TTL, cacheEverything: true } });
         if (!h.ok) return "";
         const body = await h.text();
         const og = /<meta[^>]+(?:property|name)="og:image"[^>]+content="([^"]+)"/.exec(body);
-        if (og) return htmlDecode(og[1]);
+        if (og && og[1]) return htmlDecode(og[1]);
         const anm = /<img\b[^>]*class="[^"]*anmsa[^"]*"[^>]*src="([^"]+)"|<img\b[^>]*src="([^"]+)"[^>]*class="[^"]*anmsa[^"]*"/i.exec(body);
         return anm ? htmlDecode(anm[1] || anm[2]) : "";
       } catch {
@@ -89,6 +116,8 @@ async function getItems(request, ctx) {
     }));
     items.forEach((it, i) => { it.thumb = thumbs[i]; });
 
+    // urut: terbaru dulu, gabung semua sumber
+    items.sort((a, b) => (a.pub < b.pub ? 1 : -1));
     return { items, fetchedAt: new Date().toISOString() };
   })().finally(() => { inflight = null; });
   return inflight;
@@ -124,9 +153,9 @@ async function handleRss(request, url, ctx) {
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n` +
     `<channel>\n` +
-    `<title>Rilisan Anime Sub Indo — Samehadaku (via rndmzr)</title>\n` +
+    `<title>Rilisan Anime Sub Indo (via rndmzr)</title>\n` +
     `<link>${escapeXml(url.origin + "/rss")}</link>\n` +
-    `<description>Rilisan anime terbaru sub Indo dari samehadaku.</description>\n` +
+    `<description>Rilisan anime terbaru sub Indo dari Samehadaku & Kusonime.</description>\n` +
     `<language>id-ID</language>\n` +
     `<lastBuildDate>${escapeXml(items[0]?.pub || "")}</lastBuildDate>\n` +
     `<atom:link href="${escapeXml(url.origin + "/rss")}" rel="self" type="application/rss+xml"/>\n` +
@@ -175,25 +204,46 @@ async function handleEpisode(url) {
     if (om) thumb = htmlDecode(om[1]);
   }
 
-  // download: tiap <div class="download-eps"> format <b>..</b>, <ul> <li> <strong>kualitas</strong> .download-eps-links berisi <span><a>label</a></span>
+  // parser link download berdasarkan situs:
+  // - samehadaku: .download-eps -> format + quality + host links
+  // - kusonime: .smokeurlrh -> <strong>quality</strong> link | link ...
   const groups = [];
-  const fmtRe = /<div class="download-eps"[^>]*>\s*<p><b>([^<]*)<\/b><\/p>\s*<ul>([\s\S]*?)<\/ul>/g;
-  let fm;
-  while ((fm = fmtRe.exec(html))) {
-    const format = htmlDecode(fm[1]).trim();
-    const ulInner = fm[2];
-    const liRe = /<li>\s*<strong>([^<]*)<\/strong>\s*<div class="download-eps-links">([\s\S]*?)<\/div>\s*<\/li>/g;
-    let lm;
-    while ((lm = liRe.exec(ulInner))) {
-      const quality = lm[1].trim();
+  const isKusonime = epUrl.hostname.includes("kusonime");
+
+  if (isKusonime) {
+    const kusoRe = /<div class="smokeurlrh"[^>]*>\s*<strong>([^<]*)<\/strong>([\s\S]*?)<\/div>/g;
+    let km;
+    while ((km = kusoRe.exec(html))) {
+      const quality = htmlDecode(km[1]).trim();
       const links = [];
-      const spanRe = /<span>(?:(?:<strike>([^<]*)<\/strike>)|\s*<a[^>]+href="([^"]+)"[^>]*>\s*([^<]*?)\s*<\/a>)/g;
-      let s;
-      while ((s = spanRe.exec(lm[2]))) {
-        if (s[1] !== undefined) links.push({ label: htmlDecode(s[1]).trim(), dead: true });
-        else links.push({ label: htmlDecode(s[3]).trim(), href: htmlDecode(s[2]) });
+      const aRe = /<a[^>]+href="([^"]+)"[^>]*>\s*([^<]*?)\s*<\/a>/g;
+      let am;
+      while ((am = aRe.exec(km[2]))) {
+        const href = htmlDecode(am[1]).trim();
+        const label = htmlDecode(am[2]).trim();
+        if (label && href && !href.startsWith("#")) links.push({ label, href });
       }
-      groups.push({ format, quality, links });
+      if (links.length) groups.push({ format: "Batch", quality, links });
+    }
+  } else {
+    const fmtRe = /<div class="download-eps"[^>]*>\s*<p><b>([^<]*)<\/b><\/p>\s*<ul>([\s\S]*?)<\/ul>/g;
+    let fm;
+    while ((fm = fmtRe.exec(html))) {
+      const format = htmlDecode(fm[1]).trim();
+      const ulInner = fm[2];
+      const liRe = /<li>\s*<strong>([^<]*)<\/strong>\s*<div class="download-eps-links">([\s\S]*?)<\/div>\s*<\/li>/g;
+      let lm;
+      while ((lm = liRe.exec(ulInner))) {
+        const quality = lm[1].trim();
+        const links = [];
+        const spanRe = /<span>(?:(?:<strike>([^<]*)<\/strike>)|\s*<a[^>]+href="([^"]+)"[^>]*>\s*([^<]*?)\s*<\/a>)/g;
+        let sm;
+        while ((sm = spanRe.exec(lm[2]))) {
+          if (sm[1] !== undefined) links.push({ label: htmlDecode(sm[1]).trim(), dead: true });
+          else links.push({ label: htmlDecode(sm[3]).trim(), href: htmlDecode(sm[2]) });
+        }
+        groups.push({ format, quality, links });
+      }
     }
   }
 
@@ -247,8 +297,10 @@ function renderPage() {
   <section class="hero">
     <p class="eyebrow"><span class="dot"></span><span id="count">0</span> rilis terbaru</p>
     <h1>Rilisan <span class="grad">anime</span></h1>
-    <p class="lede">Episode baru sub Indo dari samehadaku. Di-scrape otomatis tiap 15 menit.</p>
+    <p class="lede">Episode & batch terbaru sub Indo. Di-scrape otomatis tiap 15 menit.</p>
   </section>
+
+  <div id="filters" class="filters" aria-label="Filter sumber"></div>
 
   <p id="status" class="status sr-status" role="status" aria-live="polite"></p>
 
@@ -284,7 +336,7 @@ function renderPage() {
 </dialog>
 
 <footer class="wrap footer">
-  <p>Dibuat manual. Feed dari samehadaku.</p>
+  <p>Dibuat manual. Feed from samehadaku & kusonime.</p>
   <p class="mono">Data di-refresh otomatis</p>
 </footer>
 
@@ -306,27 +358,56 @@ async function load() {
     allItems = items;
     count.textContent = items.length;
     status.textContent = "Sinkron " + (data.fetchedAt ? new Date(data.fetchedAt).toLocaleString("id-ID") : "");
-    list.innerHTML = items.map((i, idx) => \`
-      <li class="row" style="animation-delay:\${Math.min(idx * 30, 400)}ms" data-i="\${idx}">
-        <img class="row-thumb" src="\${esc(i.thumb || "")}" alt="" loading="lazy" \${i.thumb ? "" : "hidden"}>
-        <span class="row-main">
-          <span class="row-title">\${esc(i.title)}</span>
-          <span class="row-meta">
-            <span class="badge">\${esc(i.cat || "Anime")}</span>
-            <time class="row-date">\${esc(fmt(i.pub))}</time>
-          </span>
-        </span>
-        <span class="arrow" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
-        </span>
-      </li>\`).join("");
-    list.hidden = !items.length;
-    empty.hidden = !!items.length;
+    renderFilters(items);
+    renderList(items);
   } catch (e) {
     list.hidden = true;
     empty.hidden = false;
     status.textContent = "Gagal memuat feed";
   }
+}
+
+function renderFilters(items) {
+  const sources = [];
+  for (const i of items) if (!sources.includes(i.sourceLabel)) sources.push(i.sourceLabel);
+  $("#filters").innerHTML = '<button class="filter active" data-src="">Semua</button>' +
+    sources.map((s) => '<button class="filter" data-src="' + esc(s) + '">' + esc(s) + "</button>").join("");
+}
+
+let activeSource = "";
+$("#filters").addEventListener("click", (e) => {
+  const b = e.target.closest(".filter");
+  if (b) applySource(b.dataset.src);
+});
+function renderList(items) {
+  const list = $("#list"), count = $("#count"), empty = $("#empty");
+  const shown = activeSource ? items.filter((i) => (i.sourceLabel || "") === activeSource) : items;
+  shownItems = shown;
+  count.textContent = shown.length;
+  list.innerHTML = shown.map((i, idx) => \`
+    <li class="row" data-i="\${idx}" style="animation-delay:\${Math.min(idx * 30, 400)}ms">
+      <img class="row-thumb" src="\${esc(i.thumb || "")}" alt="" loading="lazy" \${i.thumb ? "" : "hidden"}>
+      <span class="row-main">
+        <span class="row-name">
+          <span class="row-title">\${esc(i.title)}</span>
+        </span>
+        <span class="row-meta">
+          <span class="pill">\${esc(i.sourceLabel || "")}</span>
+          <span class="badge">\${esc(i.cat || "Anime")}</span>
+          <time class="row-date">\${esc(fmt(i.pub))}</time>
+        </span>
+      </span>
+      <span class="arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </span>
+    </li>\`).join("");
+  list.hidden = !shown.length;
+  empty.hidden = !!shown.length;
+}
+function applySource(src) {
+  activeSource = src;
+  document.querySelectorAll("#filters .filter").forEach((b) => b.classList.toggle("active", b.dataset.src === src));
+  renderList(allItems);
 }
 load();
 setInterval(load, 15 * 60 * 1000);
@@ -344,6 +425,7 @@ $("#themeBtn").addEventListener("click", () => {
 
 /* modal detail episode */
 let allItems = [];
+let shownItems = [];
 let currentEp = null;
 const modal = $("#modal");
 const modalClose = $("#modalClose");
@@ -406,7 +488,7 @@ function renderDetail(d) {
 $("#list").addEventListener("click", (e) => {
   const row = e.target.closest(".row");
   if (!row) return;
-  const ep = allItems[Number(row.dataset.i)];
+  const ep = shownItems[Number(row.dataset.i)];
   if (ep) openEpisode(ep);
 });
 
@@ -469,6 +551,11 @@ button,input{font:inherit;color:inherit}
 h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:-.03em;font-weight:700;margin:0}
 .grad{background:linear-gradient(100deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{margin:10px 0 0;color:var(--fg-soft)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 6px}
+.filter{padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg-soft);font-size:12.5px;font-weight:500;cursor:pointer;transition:all .15s}
+.filter:hover{border-color:var(--accent);color:var(--fg)}
+.filter.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.pill{flex:none;font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;background:var(--surface-2);letter-spacing:.02em;text-transform:uppercase}
 .list{list-style:none;padding:0;margin:20px 0 0;border-top:1px solid var(--line-soft)}
 .row{position:relative;display:flex;align-items:center;gap:14px;padding:10px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both;cursor:pointer}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
