@@ -7,6 +7,7 @@
 
 const UPSTREAM_FEED = "https://v2.samehadaku.how/feed/" ;
 const CACHE_TTL = 900; // 15 menit
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
 export default {
   async fetch(request, env, ctx) {
@@ -14,6 +15,9 @@ export default {
 
     if (url.pathname === "/rss" || url.pathname === "/rss.xml") {
       return handleRss(request, url, ctx);
+    }
+    if (url.pathname === "/api/episode") {
+      return handleEpisode(url);
     }
     if (url.pathname === "/api/rss") {
       try {
@@ -125,6 +129,66 @@ async function handleRss(request, url, ctx) {
   });
 }
 
+/* ---------- detail episode: thumbnail + link download ---------- */
+async function handleEpisode(url) {
+  const target = url.searchParams.get("u");
+  if (!target) return Response.json({ error: "param u wajib" }, { status: 400 });
+  let epUrl;
+  try {
+    epUrl = new URL(target);
+  } catch {
+    return Response.json({ error: "url invalid" }, { status: 400 });
+  }
+
+  const res = await fetch(epUrl, {
+    headers: { "User-Agent": UA },
+    cf: { cacheTtl: 3600, cacheEverything: true },
+  }).catch((e) => ({ ok: false, status: 0, text: async () => e.message }));
+  if (!res.ok) return Response.json({ error: `gagal ambil halaman (${res.status})` }, { status: 502 });
+  const html = await res.text();
+
+  // thumbnail: <img ... class="anmsa" ... src="..."> (src bisa sebelum/sesudah class)
+  let thumb = "";
+  const anmsaRe = /<img\b[^>]*class="[^"]*anmsa[^"]*"[^>]*src="([^"]+)"|<img\b[^>]*src="([^"]+)"[^>]*class="[^"]*anmsa[^"]*"/gi;
+  const am = anmsaRe.exec(html);
+  if (am) thumb = htmlDecode(am[1] || am[2]);
+  if (!thumb) {
+    const ogRe = /<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i;
+    const om = ogRe.exec(html);
+    if (om) thumb = htmlDecode(om[1]);
+  }
+
+  // download: tiap <div class="download-eps"> format <b>..</b>, <ul> <li> <strong>kualitas</strong> .download-eps-links berisi <span><a>label</a></span>
+  const groups = [];
+  const fmtRe = /<div class="download-eps"[^>]*>\s*<p><b>([^<]*)<\/b><\/p>\s*<ul>([\s\S]*?)<\/ul>/g;
+  let fm;
+  while ((fm = fmtRe.exec(html))) {
+    const format = htmlDecode(fm[1]).trim();
+    const ulInner = fm[2];
+    const liRe = /<li>\s*<strong>([^<]*)<\/strong>\s*<div class="download-eps-links">([\s\S]*?)<\/div>\s*<\/li>/g;
+    let lm;
+    while ((lm = liRe.exec(ulInner))) {
+      const quality = lm[1].trim();
+      const links = [];
+      const spanRe = /<span>(?:(?:<strike>([^<]*)<\/strike>)|\s*<a[^>]+href="([^"]+)"[^>]*>\s*([^<]*?)\s*<\/a>)/g;
+      let s;
+      while ((s = spanRe.exec(lm[2]))) {
+        if (s[1] !== undefined) links.push({ label: htmlDecode(s[1]).trim(), dead: true });
+        else links.push({ label: htmlDecode(s[3]).trim(), href: htmlDecode(s[2]) });
+      }
+      groups.push({ format, quality, links });
+    }
+  }
+
+  const payload = {
+    title: url.searchParams.get("t") || "",
+    thumbnail: thumb || "",
+    groups: groups.map((g) => ({ quality: g.quality, format: g.format, links: g.links })),
+    source: epUrl.href,
+  };
+  return Response.json(payload, { headers: { "cache-control": `public, max-age=${CACHE_TTL}` } });
+}
+
 /* ---------- halaman UI /anime ---------- */
 function renderPage() {
   return `<!doctype html>
@@ -183,6 +247,25 @@ function renderPage() {
   </div>
 </main>
 
+<dialog id="modal" class="modal">
+  <button class="modal-close" id="modalClose" type="button" aria-label="Tutup">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="modal-body">
+    <div class="modal-thumb"><img id="modalImg" alt="" width="640" height="360"></div>
+    <div class="modal-info">
+      <h2 id="modalTitle" class="modal-title"></h2>
+      <p id="modalSource" class="modal-source mono"></p>
+      <button id="modalOpen" class="btn-primary" type="button">
+        Buka halaman asli
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="modalGroups" class="modal-groups"></div>
+  <div id="modalLoading" class="modal-loading" role="status">Mengambil link download…</div>
+</dialog>
+
 <footer class="wrap footer">
   <p>Dibuat manual. Feed dari samehadaku.</p>
   <p class="mono">Data di-refresh otomatis</p>
@@ -203,11 +286,11 @@ async function load() {
     if (!r.ok) throw new Error("api");
     const data = await r.json();
     const items = data.items || [];
+    allItems = items;
     count.textContent = items.length;
     status.textContent = "Sinkron " + (data.fetchedAt ? new Date(data.fetchedAt).toLocaleString("id-ID") : "");
     list.innerHTML = items.map((i, idx) => \`
-      <li class="row" style="animation-delay:\${Math.min(idx * 30, 400)}ms">
-        <a class="row-link" href="\${esc(i.link)}" target="_blank" rel="noopener noreferrer" title="Buka \${esc(i.title)}"></a>
+      <li class="row" style="animation-delay:\${Math.min(idx * 30, 400)}ms" data-i="\${idx}">
         <span class="row-main">
           <span class="row-title">\${esc(i.title)}</span>
           <span class="row-meta">
@@ -240,8 +323,83 @@ $("#themeBtn").addEventListener("click", () => {
   localStorage.setItem(LS, next);
   document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#101216" : "#f4f6fb";
 });
+
+/* modal detail episode */
+let allItems = [];
+let currentEp = null;
+const modal = $("#modal");
+const modalClose = $("#modalClose");
+const modalImg = $("#modalImg");
+const modalTitle = $("#modalTitle");
+const modalSource = $("#modalSource");
+const modalOpen = $("#modalOpen");
+function modalGroups() { return $("#modalGroups"); }
+function modalLoading(on) { $("#modalLoading").hidden = !on; }
+const closeModal = () => { modal.close(); document.body.classList.remove("no-scroll"); };
+
+function openEpisode(ep) {
+  currentEp = ep;
+  modalTitle.textContent = ep.title;
+  modalSource.textContent = [ep.cat, ep.pub ? fmt(ep.pub) : ""].filter(Boolean).join(" · ");
+  modalImg.src = "";
+  modalImg.hidden = true;
+  modalGroups().hidden = true;
+  modalLoading(true);
+  modal.showModal();
+  document.body.classList.add("no-scroll");
+  loadEpisode(ep);
+}
+
+async function loadEpisode(ep) {
+  if (ep.detail) return renderDetail(ep.detail);
+  try {
+    const r = await fetch("/api/episode?u=" + encodeURIComponent(ep.link) + "&t=" + encodeURIComponent(ep.title));
+    if (!r.ok) throw new Error("api");
+    const d = await r.json();
+    ep.detail = d;
+    renderDetail(d);
+  } catch {
+    modalGroups().hidden = false;
+    modalGroups().innerHTML = \`<div class="group"><p class="link-dead-txt">Gagal mengambil link download.</p></div>\`;
+  } finally {
+    modalLoading(false);
+  }
+}
+
+function renderDetail(d) {
+  if (d.thumbnail) {
+    modalImg.src = d.thumbnail;
+    modalImg.hidden = false;
+  }
+  modalGroups().hidden = !(d.groups && d.groups.length);
+  modalGroups().innerHTML = (d.groups || []).map((g) => \`
+    <div class="group">
+      <h3 class="group-title">\${esc(g.format || "Format")} · \${esc(g.quality)}</h3>
+      <div class="group-links">
+        \${(g.links || []).map((l) => l.dead
+          ? \`<span class="link dead" title="Link mati">\${esc(l.label)}</span>\`
+          : \`<a class="link" href="\${esc(l.href)}" target="_blank" rel="noopener noreferrer">\${esc(l.label)}</a>\`
+        ).join("")}
+      </div>
+    </div>\`).join("");
+  modalLoading(false);
+}
+
+$("#list").addEventListener("click", (e) => {
+  const row = e.target.closest(".row");
+  if (!row) return;
+  const ep = allItems[Number(row.dataset.i)];
+  if (ep) openEpisode(ep);
+});
+
+modalOpen.addEventListener("click", () => { if (currentEp) window.open(currentEp.link, "_blank", "noopener"); });
+modalClose.addEventListener("click", closeModal);
+modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+modal.addEventListener("close", () => document.body.classList.remove("no-scroll"));
+
 document.addEventListener("keydown", (e) => {
-  if ((e.key === "t" || e.key === "T") && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) $("#themeBtn").click();
+  if (e.key === "Escape" && modal.open) closeModal();
+  if ((e.key === "t" || e.key === "T") && !/^(INPUT|TEXTAREA|BUTTON)$/.test(document.activeElement?.tagName || "")) $("#themeBtn").click();
 });
 </script>
 </body>
@@ -294,12 +452,10 @@ h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:-.03em;font-
 .grad{background:linear-gradient(100deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{margin:10px 0 0;color:var(--fg-soft)}
 .list{list-style:none;padding:0;margin:20px 0 0;border-top:1px solid var(--line-soft)}
-.row{position:relative;display:flex;flex-direction:column;gap:6px;padding:15px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both}
+.row{position:relative;display:flex;flex-direction:column;gap:6px;padding:15px 8px;border-bottom:1px solid var(--line-soft);animation:rise .3s cubic-bezier(.25,1,.5,1) both;cursor:pointer}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 .row:hover{background:var(--surface-2)}
 .row:focus-within{background:var(--surface-2)}
-.row-link{position:absolute;inset:0;border-radius:10px}
-.row:hover .row-link{border:1px solid var(--line);outline:none}
 .row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .row-title{font-size:15px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;word-break:break-word}
 .row-title:hover{color:var(--accent)}
@@ -312,6 +468,40 @@ h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:-.03em;font-
 .skeleton{height:54px;background:var(--surface-2);border-radius:10px;margin:6px 0;animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:.8}}
 .empty{padding:60px 20px;text-align:center;color:var(--fg-soft)}
+.no-scroll{overflow:hidden}
+.modal{border:0;border-radius:18px;background:var(--surface);color:var(--fg);padding:0;width:100%;max-width:640px;box-shadow:0 24px 80px rgba(0,0,0,.45);position:relative}
+.modal::backdrop{background:rgba(6,8,12,.6);backdrop-filter:blur(3px)}
+.modal[open]{animation:modalIn .22s cubic-bezier(.25,1,.5,1)}
+@keyframes modalIn{from{opacity:0;transform:translateY(12px) scale(.98)}}
+.modal-close{position:absolute;top:12px;right:12px;z-index:2;width:32px;height:32px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg-soft);cursor:pointer}
+.modal-close svg{width:15px;height:15px}
+.modal-close:hover{color:var(--fg)}
+.modal-body{display:flex;gap:18px;padding:20px;align-items:flex-start}
+.modal-thumb{flex:none;width:200px;border-radius:12px;overflow:hidden;background:var(--surface-2);aspect-ratio:16/9}
+.modal-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.modal-thumb[hidden]{display:none}
+.modal-info{flex:1;min-width:0}
+.modal-title{font-size:19px;line-height:1.3;letter-spacing:-.01em;margin:0 0 6px}
+.modal-source{color:var(--fg-dim);margin:0 0 14px}
+.btn-primary{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border:0;border-radius:10px;background:linear-gradient(145deg,var(--accent),var(--accent-2));color:var(--accent-fg);font-weight:600;font-size:13px;cursor:pointer}
+.btn-primary svg{width:15px;height:15px}
+.modal-groups{display:flex;flex-direction:column;gap:14px;padding:0 20px 20px;max-height:52vh;overflow:auto}
+.group{border-top:1px solid var(--line-soft);padding-top:14px}
+.group-title{font-size:13px;font-weight:700;letter-spacing:.02em;margin:0 0 9px;color:var(--fg-soft);font-family:var(--font-mono)}
+.group-links{display:flex;flex-wrap:wrap;gap:8px}
+.link{display:inline-flex;align-items:center;padding:7px 13px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);font-size:13px;font-weight:500;color:var(--fg);transition:border-color .15s,color .15s}
+a.link:hover{border-color:var(--accent);color:var(--accent)}
+a.link{text-decoration:none}
+.link.dead{opacity:.45;color:var(--fg-dim);text-decoration:line-through;cursor:default}
+.link-dead-txt{color:var(--fg-dim);margin:0;font-size:14px}
+.modal-loading{padding:6px 20px 22px;color:var(--fg-dim);font-size:13px;display:flex;align-items:center;gap:9px}
+.modal-loading[hidden]{display:none}
+.modal-loading::before{content:"";width:13px;height:13px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:640px){
+  .modal-body{flex-direction:column}
+  .modal-thumb{width:100%}
+}
 .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:72px;padding-block:28px;border-top:1px solid var(--line-soft);font-size:13px;color:var(--fg-dim)}
 @media(max-width:640px){
   .row-title{font-size:14px}
