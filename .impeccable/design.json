@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "world": "Fillmore Handbill",
+  "mode": "operate",
+  "tokens": {
+    "colors": {
+      "paper": "#f3ead8",
+      "ink": "#181512",
+      "vermilion": "#e8452c",
+      "yolk": "#f5d64c",
+      "midnight": "#1b2a52",
+      "hairline": "#d8cbb4",
+      "dark-bg": "#12141c"
+    },
+    "gradients": {
+      "split-fountain": "linear-gradient(100deg, #e8452c, #f5d64c)",
+      "midnight": "linear-gradient(140deg, #1b2a52, #223664)"
+    },
+    "fonts": {
+      "display": "Archivo, sans-serif",
+      "mono": "Space Mono, monospace"
+    }
+  },
+  "signature": "featured split-fountain headliner row"
+}

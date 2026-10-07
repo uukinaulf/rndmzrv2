@@ -48,7 +48,8 @@ const results = () => filterLinks(LINKS, haystack, { ...state, favs });
 function row(l, q) {
   const c = catOf(l.cat);
   const isFav = favs.has(l.url);
-  return `<li class="row" data-url="${escapeHtml(l.url)}">
+  const lead = l.featured ? " lead" : "";
+  return `<li class="row${lead}" data-url="${escapeHtml(l.url)}">
     <a class="row-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><span class="sr-only">Buka ${escapeHtml(l.title)}</span></a>
     <span class="favicon" aria-hidden="true">${icon(c?.icon, 1.5)}</span>
     <span class="row-main">
@@ -133,7 +134,7 @@ $("#themeBtn").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   store.set(LS.theme, next);
-  document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#101216" : "#f4f6fb";
+  document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#12141c" : "#f3ead8";
 });
 
 document.addEventListener("keydown", (e) => {
@@ -149,7 +150,7 @@ document.addEventListener("keydown", (e) => {
   document.documentElement.dataset.theme =
     store.get(LS.theme, null) || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
   document.querySelector('meta[name="theme-color"]').content =
-    document.documentElement.dataset.theme === "dark" ? "#101216" : "#f4f6fb";
+    document.documentElement.dataset.theme === "dark" ? "#12141c" : "#f3ead8";
 
   const p = new URLSearchParams(location.search);
   state.q = p.get("q") || "";
