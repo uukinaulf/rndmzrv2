@@ -50,18 +50,29 @@ function row(l, q, i) {
   const isFav = favs.has(l.url);
   const lead = l.featured ? " lead" : "";
   const num = String(i + 1).padStart(2, "0");
-  return `<li class="row${lead}" data-url="${escapeHtml(l.url)}">
-    <a class="row-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><span class="sr-only">Buka ${escapeHtml(l.title)}</span></a>
-    <span class="ticket-no mono" aria-hidden="true">${num}</span>
-    <span class="favicon" aria-hidden="true">${icon(c?.icon, 1.5)}</span>
-    <span class="row-main">
-      <span class="row-title">${highlight(l.title, q)}</span>
-      <span class="row-desc">${highlight(l.desc, q)}</span>
-    </span>
-    <span class="row-tags">${(l.tags || []).map((t) => `<span class="tag">${highlight(t, q)}</span>`).join("")}</span>
-    <button class="star" type="button" aria-pressed="${isFav}" aria-label="${isFav ? "Hapus dari" : "Tambah ke"} favorit: ${escapeHtml(l.title)}">
-      <svg viewBox="0 0 24 24" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z"/></svg>
-    </button>
+  const hostname = host(l.url);
+  return `<li class="row card${lead}" data-url="${escapeHtml(l.url)}">
+    <a class="card-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><span class="sr-only">Buka ${escapeHtml(l.title)}</span></a>
+    <div class="card-top">
+      <span class="card-cat">
+        <span class="card-cat-ico" aria-hidden="true">${icon(c?.icon, 1.4)}</span>
+        <span class="card-cat-name">${escapeHtml(c?.label || l.cat)}</span>
+      </span>
+      <span class="card-host mono">${escapeHtml(hostname)}</span>
+      <button class="star" type="button" aria-pressed="${isFav}" aria-label="${isFav ? "Hapus dari" : "Tambah ke"} favorit: ${escapeHtml(l.title)}">
+        <svg viewBox="0 0 24 24" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z"/></svg>
+      </button>
+    </div>
+    <div class="card-main">
+      <h3 class="card-title">${highlight(l.title, q)}</h3>
+      <p class="card-desc">${highlight(l.desc, q)}</p>
+    </div>
+    <div class="card-foot">
+      <div class="card-tags">
+        ${(l.tags || []).map((t) => `<span class="tag">${highlight(t, q)}</span>`).join("")}
+      </div>
+      <span class="card-no mono" aria-hidden="true">#${num}</span>
+    </div>
   </li>`;
 }
 
@@ -115,7 +126,9 @@ chips.addEventListener("click", (e) => {
   state.cat = btn.dataset.cat;
   renderChips();
   render();
-  grid.scrollIntoView({ block: "start", behavior: "smooth" });
+  if (window.matchMedia("(max-width: 959px)").matches) {
+    grid.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 });
 
 $("#favOnly").addEventListener("change", (e) => { state.favOnly = e.target.checked; render(); });
