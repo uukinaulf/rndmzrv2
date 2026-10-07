@@ -45,12 +45,14 @@ function highlight(text, q) {
 
 const results = () => filterLinks(LINKS, haystack, { ...state, favs });
 
-function row(l, q) {
+function row(l, q, i) {
   const c = catOf(l.cat);
   const isFav = favs.has(l.url);
   const lead = l.featured ? " lead" : "";
+  const num = String(i + 1).padStart(2, "0");
   return `<li class="row${lead}" data-url="${escapeHtml(l.url)}">
     <a class="row-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><span class="sr-only">Buka ${escapeHtml(l.title)}</span></a>
+    <span class="ticket-no mono" aria-hidden="true">${num}</span>
     <span class="favicon" aria-hidden="true">${icon(c?.icon, 1.5)}</span>
     <span class="row-main">
       <span class="row-title">${highlight(l.title, q)}</span>
@@ -72,7 +74,7 @@ function renderChips() {
 function render() {
   const list = results();
   const q = state.q.trim();
-  grid.innerHTML = list.map((l) => row(l, q)).join("");
+  grid.innerHTML = list.map((l, i) => row(l, q, i)).join("");
   emptyBox.hidden = list.length > 0;
   emptyBox.querySelector("p").innerHTML = q ? `Tidak ada hasil untuk <strong>${escapeHtml(q)}</strong>.` : "Tidak ada link buat filter ini.";
   status.textContent = [`${list.length} dari ${LINKS.length} link`, (state.cat !== "all" ? catOf(state.cat)?.label : null), (state.favOnly ? "favorit" : null)].filter(Boolean).join(" · ");
