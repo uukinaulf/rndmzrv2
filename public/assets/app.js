@@ -18,23 +18,33 @@ const ICONS = {
 const icon = (name, w = 2) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.code}</svg>`;
 
-const LS = { theme: "rndmzr:theme", fav: "rndmzr:fav" };
+const LS_THEME = "rndmzr:theme";
+const LS_FAV = "rndmzr:fav";
 const store = {
   get(k, fallback) { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
 const catOf = (id) => CATEGORIES.find((c) => c.id === id);
+
+// Default favorit awal (MDN & roadmap.sh) agar filter favorit tidak langsung hampa
+const defaultFavs = ["https://developer.mozilla.org", "https://roadmap.sh"];
+const savedFavs = store.get(LS_FAV, null);
+const favs = new Set(savedFavs !== null ? savedFavs : defaultFavs);
+if (savedFavs === null) {
+  store.set(LS_FAV, [...favs]);
+}
+
 let state = {
   q: "",
-  cat: new URLSearchParams(location.search).get("cat") || "all",
+  cat: "all",
   favOnly: false,
 };
-const favs = new Set(store.get(LS.fav, []));
+
 const haystack = buildIndex(LINKS, (c) => catOf(c)?.label || c);
 
 function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function highlight(text, q) {
   const safe = escapeHtml(text);
@@ -53,25 +63,25 @@ function row(l, q, i) {
   const hostname = host(l.url);
   return `<li class="row card${lead}" data-url="${escapeHtml(l.url)}">
     <a class="card-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><span class="sr-only">Buka ${escapeHtml(l.title)}</span></a>
-    <div class="card-top">
-      <span class="card-cat">
-        <span class="card-cat-ico" aria-hidden="true">${icon(c?.icon, 1.4)}</span>
-        <span class="card-cat-name">${escapeHtml(c?.label || l.cat)}</span>
-      </span>
+    <div class="row-main-col">
+      <span class="row-index mono" aria-hidden="true">${num}</span>
+      <div class="row-text-group">
+        <div class="row-title-row">
+          <h3 class="card-title">${highlight(l.title, q)}</h3>
+          <span class="card-cat">
+            <span class="card-cat-ico" aria-hidden="true">${icon(c?.icon, 1.4)}</span>
+            <span class="card-cat-name">${escapeHtml(c?.label || l.cat)}</span>
+          </span>
+        </div>
+        <p class="card-desc">${highlight(l.desc, q)}</p>
+      </div>
+    </div>
+    <div class="row-meta-col">
       <span class="card-host mono">${escapeHtml(hostname)}</span>
       <button class="star" type="button" aria-pressed="${isFav}" aria-label="${isFav ? "Hapus dari" : "Tambah ke"} favorit: ${escapeHtml(l.title)}">
         <svg viewBox="0 0 24 24" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z"/></svg>
       </button>
-    </div>
-    <div class="card-main">
-      <h3 class="card-title">${highlight(l.title, q)}</h3>
-      <p class="card-desc">${highlight(l.desc, q)}</p>
-    </div>
-    <div class="card-foot">
-      <div class="card-tags">
-        ${(l.tags || []).map((t) => `<span class="tag">${highlight(t, q)}</span>`).join("")}
-      </div>
-      <span class="card-no mono" aria-hidden="true">#${num}</span>
+      <span class="row-arrow" aria-hidden="true">&UpperRightArrow;</span>
     </div>
   </li>`;
 }
@@ -86,9 +96,50 @@ function render() {
   const list = results();
   const q = state.q.trim();
   grid.innerHTML = list.map((l, i) => row(l, q, i)).join("");
-  emptyBox.hidden = list.length > 0;
-  emptyBox.querySelector("p").innerHTML = q ? `Tidak ada hasil untuk <strong>${escapeHtml(q)}</strong>.` : "Tidak ada link buat filter ini.";
-  status.textContent = [`${list.length} dari ${LINKS.length} link`, (state.cat !== "all" ? catOf(state.cat)?.label : null), (state.favOnly ? "favorit" : null)].filter(Boolean).join(" · ");
+
+  const hasItems = list.length > 0;
+  emptyBox.hidden = hasItems;
+
+  if (!hasItems) {
+    const resetBtn = $("#resetBtn");
+    if (state.favOnly && favs.size === 0) {
+      emptyBox.querySelector("p").innerHTML = `
+        <strong>Belum ada link favorit tersimpan.</strong><br>
+        <span style="font-size:0.85rem;color:var(--fg-dim);display:inline-block;margin-top:4px;">
+          Klik ikon bintang <span style="color:var(--accent-2)">★</span> di link mana pun untuk menyimpannya di sini.
+        </span>
+      `;
+      resetBtn.textContent = "Tampilkan semua link";
+    } else if (state.favOnly && favs.size > 0) {
+      emptyBox.querySelector("p").innerHTML = `
+        <strong>Tidak ada link favorit di kategori "${escapeHtml(catOf(state.cat)?.label || state.cat)}".</strong><br>
+        <span style="font-size:0.85rem;color:var(--fg-dim);display:inline-block;margin-top:4px;">
+          Anda memiliki ${favs.size} link favorit di kategori lain.
+        </span>
+      `;
+      resetBtn.textContent = "Lihat semua favorit";
+    } else if (q) {
+      emptyBox.querySelector("p").innerHTML = `
+        Tidak ada link yang cocok dengan "<strong>${escapeHtml(q)}</strong>".<br>
+        <span style="font-size:0.85rem;color:var(--fg-dim);display:inline-block;margin-top:4px;">
+          Coba periksa ejaan atau gunakan kata kunci lain.
+        </span>
+      `;
+      resetBtn.textContent = "Bersihkan pencarian";
+    } else {
+      emptyBox.querySelector("p").innerHTML = `
+        Belum ada link untuk kategori <strong>${escapeHtml(catOf(state.cat)?.label || state.cat)}</strong>.
+      `;
+      resetBtn.textContent = "Kembali ke semua link";
+    }
+  }
+
+  status.textContent = [
+    `${list.length} dari ${LINKS.length} link`,
+    (state.cat !== "all" ? catOf(state.cat)?.label : null),
+    (state.favOnly ? "favorit" : null)
+  ].filter(Boolean).join(" · ");
+
   syncUrl();
 }
 
@@ -109,6 +160,15 @@ function toast(msg) {
   toastTimer = setTimeout(() => toastEl.classList.remove("on"), 2200);
 }
 
+function toggleTheme() {
+  const cur = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem(LS_THEME, next);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = next === "dark" ? "#0e1117" : "#f4ede1";
+}
+
 /* ---- events ---- */
 let rafId;
 qInput.addEventListener("input", () => {
@@ -117,13 +177,38 @@ qInput.addEventListener("input", () => {
   cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(render);
 });
-$("#clearBtn").addEventListener("click", () => { qInput.value = ""; state.q = ""; $("#clearBtn").hidden = true; render(); qInput.focus(); });
-$("#resetBtn").addEventListener("click", () => { state = { ...state, q: "", cat: "all", favOnly: false }; qInput.value = ""; $("#clearBtn").hidden = true; $("#favOnly").checked = false; renderChips(); render(); qInput.focus(); });
+$("#clearBtn").addEventListener("click", () => {
+  qInput.value = "";
+  state.q = "";
+  $("#clearBtn").hidden = true;
+  render();
+  qInput.focus();
+});
+
+$("#resetBtn").addEventListener("click", () => {
+  if (state.favOnly && favs.size > 0 && state.cat !== "all" && !state.q) {
+    state.cat = "all";
+  } else {
+    state.q = "";
+    state.cat = "all";
+    state.favOnly = false;
+    qInput.value = "";
+    $("#clearBtn").hidden = true;
+    $("#favOnly").checked = false;
+  }
+  renderChips();
+  render();
+  qInput.focus();
+});
 
 chips.addEventListener("click", (e) => {
   const btn = e.target.closest(".chip");
   if (!btn) return;
   state.cat = btn.dataset.cat;
+  if (state.favOnly && favs.size === 0) {
+    state.favOnly = false;
+    $("#favOnly").checked = false;
+  }
   renderChips();
   render();
   if (window.matchMedia("(max-width: 959px)").matches) {
@@ -131,7 +216,10 @@ chips.addEventListener("click", (e) => {
   }
 });
 
-$("#favOnly").addEventListener("change", (e) => { state.favOnly = e.target.checked; render(); });
+$("#favOnly").addEventListener("change", (e) => {
+  state.favOnly = e.target.checked;
+  render();
+});
 
 grid.addEventListener("click", (e) => {
   const star = e.target.closest(".star");
@@ -139,42 +227,54 @@ grid.addEventListener("click", (e) => {
   e.preventDefault();
   const url = star.closest(".row").dataset.url;
   favs.has(url) ? favs.delete(url) : favs.add(url);
-  store.set(LS.fav, [...favs]);
+  store.set(LS_FAV, [...favs]);
   const link = LINKS.find((l) => l.url === url);
-  toast(favs.has(url) ? `Favorit: ${link.title}` : `Dihapus: ${link.title}`);
+  toast(favs.has(url) ? `Favorit: ${link?.title || url}` : `Dihapus: ${link?.title || url}`);
   render();
 });
 
-$("#themeBtn").addEventListener("click", () => {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  document.documentElement.dataset.theme = next;
-  store.set(LS.theme, next);
-  document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#12141c" : "#f3ead8";
-});
+$("#themeBtn").addEventListener("click", toggleTheme);
+
+const dockTopBtn = $("#dockTopBtn");
+if (dockTopBtn) {
+  dockTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+}
+const dockSearchBtn = $("#dockSearchBtn");
+if (dockSearchBtn) {
+  dockSearchBtn.addEventListener("click", () => {
+    qInput.focus();
+    qInput.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+}
+const dockThemeBtn = $("#dockThemeBtn");
+if (dockThemeBtn) {
+  dockThemeBtn.addEventListener("click", toggleTheme);
+}
 
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
   if (e.key === "/" && !typing) { e.preventDefault(); qInput.focus(); }
   else if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) { e.preventDefault(); qInput.focus(); qInput.select(); }
   else if (e.key === "Escape" && typing) { qInput.blur(); }
-  else if (!typing && (e.key === "t" || e.key === "T")) { $("#themeBtn").click(); }
+  else if (!typing && (e.key === "t" || e.key === "T")) { toggleTheme(); }
 });
 
 /* ---- init ---- */
 (function init() {
-  document.documentElement.dataset.theme =
-    store.get(LS.theme, null) || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  document.querySelector('meta[name="theme-color"]').content =
-    document.documentElement.dataset.theme === "dark" ? "#12141c" : "#f3ead8";
+  const savedTheme = localStorage.getItem(LS_THEME) || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = savedTheme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = savedTheme === "dark" ? "#0e1117" : "#f4ede1";
 
   const p = new URLSearchParams(location.search);
   state.q = p.get("q") || "";
+  const catParam = p.get("cat");
+  state.cat = CATEGORIES.some((c) => c.id === catParam) ? catParam : "all";
   state.favOnly = p.get("fav") === "1";
+
   if (state.q) { qInput.value = state.q; $("#clearBtn").hidden = false; }
   $("#favOnly").checked = state.favOnly;
 
-  $("#totalCount").textContent = LINKS.length;
-  $("#catCount").textContent = CATEGORIES.length;
   renderChips();
   render();
 })();
